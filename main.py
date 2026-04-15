@@ -57,9 +57,11 @@ async def check_new_etfs():
             await bot.send_message(chat_id=CHAT_ID, text=message)
             print(f"신규 상장 {len(new_tickers)}건 알림 전송 완료.")
         
-        elif is_first_run:
-            # 첫 실행 시: 알림 없이 현재 상태만 저장
-            print("초기 리스트 저장 완료. 다음 실행부터 신규 상장을 감지합니다.")
+        elif is_first_run or ("test" in os.environ.get("GITHUB_WORKFLOW", "").lower()):
+            # 테스트 또는 첫 실행 시에도 확인 메시지 발송
+            test_msg = f"🔔 {today} ETF 모니터링 시스템 작동 확인\n\n현재 정상적으로 KRX 데이터를 감시하고 있습니다. 신규 상장 발생 시 알림이 발송됩니다."
+            await bot.send_message(chat_id=CHAT_ID, text=test_msg)
+            print("테스트/초기화 알림 전송 완료.")
         
         else:
             # 변동 사항 없는 경우 (로컬 테스트 시 확인을 위해 로그만 출력)
