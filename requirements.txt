@@ -1,0 +1,4 @@
+pykrx
+python-telegram-bot
+pandas
+python-dotenv
