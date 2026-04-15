@@ -29,8 +29,14 @@ async def check_new_etfs():
     
     try:
         # 1. 현재 상장된 모든 ETF 티커 리스트 가져오기
-        # pykrx.stock.get_etf_ticker_list()는 현재 날짜 기준의 ETF 리스트를 반환합니다.
-        current_tickers = set(stock.get_etf_ticker_list())
+        current_tickers_list = stock.get_etf_ticker_list()
+        
+        # 데이터가 비어있는지 확인 (새벽 점검 시간 등 대응)
+        if not current_tickers_list:
+            print("⚠️ KRX에서 ETF 리스트를 가져오지 못했습니다. (사이트 점검 중일 수 있습니다.)")
+            return
+
+        current_tickers = set(current_tickers_list)
         print(f"현재 총 {len(current_tickers)}개 종목 상장 중.")
         
         # 2. 이전 상장 리스트 로드
@@ -38,8 +44,12 @@ async def check_new_etfs():
         previous_tickers = set()
         
         if not is_first_run:
-            df_prev = pd.read_csv(DATA_FILE, dtype={'ticker': str})
-            previous_tickers = set(df_prev['ticker'].tolist())
+            try:
+                df_prev = pd.read_csv(DATA_FILE, dtype={'ticker': str})
+                previous_tickers = set(df_prev['ticker'].tolist())
+            except Exception as e:
+                print(f"이전 데이터 로드 중 오류(초기화 진행): {e}")
+                is_first_run = True
         else:
             print("이전 기록 파일이 없습니다. 초기화를 진행합니다.")
 
@@ -47,7 +57,9 @@ async def check_new_etfs():
         new_tickers = current_tickers - previous_tickers
         
         # [임시 테스트] 알림 작동 확인을 위해 가상 종목을 하나 추가합니다.
+        # 실제 운영 시에는 이 부분을 삭제하거나 주석 처리하세요.
         if not is_first_run and not new_tickers:
+            print("테스트를 위해 가상 종목 TEST999를 추가합니다.")
             new_tickers.add("TEST999")
 
         # 4. 알림 발송 로직
@@ -55,11 +67,14 @@ async def check_new_etfs():
             # 신규 상장 종목이 있는 경우
             message = f"🆕 {today} 신규 상장 ETF 알림\n\n"
             for ticker in sorted(list(new_tickers)):
-                if ticker == "TEST999":
-                    name = "알림 시스템 작동 테스트용 종목"
-                else:
-                    name = stock.get_etf_ticker_name(ticker)
-                message += f"• [{ticker}] {name}\n"
+                try:
+                    if ticker == "TEST999":
+                        name = "알림 시스템 작동 테스트용 종목"
+                    else:
+                        name = stock.get_etf_ticker_name(ticker)
+                    message += f"• [{ticker}] {name}\n"
+                except Exception as e:
+                    message += f"• [{ticker}] (이름 조회 실패: {str(e)})\n"
             
             await bot.send_message(chat_id=CHAT_ID, text=message)
             print(f"신규 상장(테스트 포함) {len(new_tickers)}건 알림 전송 완료.")
