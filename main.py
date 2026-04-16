@@ -97,13 +97,20 @@ async def check_new_etfs():
         
         # 4. 알림 발송 로직
         if new_tickers:
-            message = f"🆕 {now_kst.strftime('%Y-%m-%d')} 신규 상장 ETF 알림\n(FDR + ETFCheck 통합 감지)\n\n"
-            for ticker in sorted(list(new_tickers)):
-                name = all_names.get(ticker, "이름 정보 없음")
-                message += f"• [{ticker}] {name}\n"
-            
-            await bot.send_message(chat_id=CHAT_ID, text=message)
-            print(f"신규 상장 {len(new_tickers)}건 알림 전송 완료.")
+            # 신규 종목이 너무 많으면(예: 30개 초과) 초기 동기화로 간주하여 요약만 전송
+            if len(new_tickers) > 30:
+                summary_msg = f"🔄 {now_kst.strftime('%Y-%m-%d')} ETF 데이터 동기화 완료\n\n총 {len(new_tickers)}개의 종목을 새로 인식하여 데이터베이스를 업데이트했습니다. 내일부터는 신규 상장 종목만 실시간으로 알려드립니다. ✅"
+                await bot.send_message(chat_id=CHAT_ID, text=summary_msg)
+                print(f"대량 데이터({len(new_tickers)}건) 감지로 요약 알림 전송.")
+            else:
+                # 일반적인 신규 상장 알림
+                message = f"🆕 {now_kst.strftime('%Y-%m-%d')} 신규 상장 ETF 알림\n(데이터 소스: 통합 감지)\n\n"
+                for ticker in sorted(list(new_tickers)):
+                    name = all_names.get(ticker, "이름 정보 없음")
+                    message += f"• [{ticker}] {name}\n"
+                
+                await bot.send_message(chat_id=CHAT_ID, text=message)
+                print(f"신규 상장 {len(new_tickers)}건 알림 전송 완료.")
         else:
             print("신규 상장 종목이 없습니다.")
 
