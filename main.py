@@ -17,22 +17,22 @@ DATA_FILE = "last_etf_tickers.csv"
 def get_latest_etf_tickers():
     """
     KST 기준 오늘부터 과거로 가며 데이터가 있는 가장 최근 날짜의 ETF 리스트를 반환합니다.
-    장 시작 전 '오늘' 데이터가 없을 때 발생하는 IndexError를 방지합니다.
     """
     # KST (UTC+9) 기준 현재 시간 계산
     kst = datetime.timezone(datetime.timedelta(hours=9))
     base_datetime = datetime.datetime.now(kst)
     
-    # 최근 7일간의 데이터를 시도하여 가장 최신 영업일 데이터를 찾음
-    for i in range(7):
+    # 최근 10일간의 데이터를 시도하여 가장 최신 영업일 데이터를 찾음
+    for i in range(10):
         target_date = (base_datetime - datetime.timedelta(days=i)).strftime("%Y%m%d")
         try:
+            # get_etf_ticker_list()는 데이터가 없으면 빈 리스트를 반환하거나 IndexError를 낼 수 있음
             tickers = stock.get_etf_ticker_list(target_date)
             if tickers and len(tickers) > 0:
-                print(f"✅ {target_date} 기준 데이터를 성공적으로 가져왔습니다.")
+                print(f"✅ {target_date} 기준 데이터를 성공적으로 가져왔습니다. (종목 수: {len(tickers)})")
                 return set(tickers), target_date
-        except (IndexError, Exception):
-            # IndexError는 주로 해당 일자에 데이터가 없을 때 pykrx 내부에서 발생함
+        except (IndexError, Exception) as e:
+            print(f"DEBUG: {target_date} 조회 시도 중 오류/데이터 없음: {str(e)}")
             continue
             
     return None, None
@@ -52,15 +52,16 @@ async def check_new_etfs():
     print(f"[{today_kst}] KRX ETF 상장 모니터링 시작...")
     
     try:
-        # 1. 현재 상장된 가장 최신 ETF 티커 리스트 가져오기 (재시도 로직 포함)
+        # 1. 현재 상장된 가장 최신 ETF 티커 리스트 가져오기
         current_tickers, data_date = get_latest_etf_tickers()
         
+        # 데이터 조회 실패 시에도 알림 (디버깅용)
         if not current_tickers:
-            print("⚠️ KRX에서 ETF 리스트를 가져오지 못했습니다. (최근 7일간 데이터 부재)")
+            error_msg = f"⚠️ [{today_kst}] KRX 데이터 조회 실패\n최근 10일간의 ETF 리스트를 가져오지 못했습니다. pykrx 라이브러리 상태를 확인해 주세요."
+            print(error_msg)
+            await bot.send_message(chat_id=CHAT_ID, text=error_msg)
             return
 
-        print(f"조회 기준일: {data_date}, 상장 종목 수: {len(current_tickers)}개")
-        
         # 2. 이전 상장 리스트 로드
         is_first_run = not os.path.exists(DATA_FILE)
         previous_tickers = set()
@@ -70,27 +71,25 @@ async def check_new_etfs():
                 df_prev = pd.read_csv(DATA_FILE, dtype={'ticker': str})
                 previous_tickers = set(df_prev['ticker'].tolist())
             except Exception as e:
-                print(f"이전 데이터 로드 중 오류(초기화 진행): {e}")
-                is_first_run = True
+                print(f"이전 데이터 로드 오류: {e}")
         else:
-            print("이전 기록 파일이 없습니다. 초기화를 진행합니다.")
+            print("이전 기록 파일이 없습니다. (최초 실행 모드)")
 
-        # 3. 신규 상장 종목 식별 (현재 리스트 - 이전 리스트)
+        # 3. 신규 상장 종목 식별
         new_tickers = current_tickers - previous_tickers
         
-        # [임시 테스트] 알림 확인을 위한 샘플 종목 강제 추가 (확인 후 삭제 예정)
-        if not is_first_run and not new_tickers:
-            print("🔔 작동 확인을 위해 샘플 종목을 신규 리스트에 추가합니다.")
-            new_tickers.add("SAMPLE_READY")
+        # [임시 테스트] 이번에는 시스템 생존 확인을 위해 무조건 샘플을 추가합니다.
+        if not new_tickers:
+            print("🔔 작동 확인을 위해 샘플 종목을 추가합니다.")
+            new_tickers.add("SAMPLE_OK")
 
         # 4. 알림 발송 로직
-        if not is_first_run and new_tickers:
-            # 신규 상장 종목이 있는 경우
-            message = f"🆕 {today_kst} 신규 상장 ETF 알림\n(데이터 기준일: {data_date})\n\n"
+        if new_tickers:
+            message = f"🆕 {today_kst} KRX ETF 모니터링 알림\n(데이터 기준일: {data_date})\n\n"
             for ticker in sorted(list(new_tickers)):
                 try:
-                    if ticker == "SAMPLE_READY":
-                        name = "✅ 알림 시스템 안정화 완료(작동 테스트)"
+                    if ticker == "SAMPLE_OK":
+                        name = "✅ 알림 시스템 안정화 완료(생존 보고)"
                     else:
                         name = stock.get_etf_ticker_name(ticker)
                     message += f"• [{ticker}] {name}\n"
@@ -98,25 +97,18 @@ async def check_new_etfs():
                     message += f"• [{ticker}] (이름 조회 실패)\n"
             
             await bot.send_message(chat_id=CHAT_ID, text=message)
-            print(f"신규 상장(샘플 포함) {len(new_tickers)}건 알림 전송 완료.")
-        
-        elif is_first_run:
-            print("초기 리스트 저장 완료. 다음 실행부터 신규 상장을 감지합니다.")
-        
-        else:
-            print("신규 상장 종목이 없습니다.")
+            print(f"알림 전송 완료 (종목 수: {len(new_tickers)})")
 
-        # 5. 현재 리스트 저장 (상태 업데이트)
+        # 5. 현재 리스트 저장
         df_current = pd.DataFrame({'ticker': sorted(list(current_tickers))})
         df_current.to_csv(DATA_FILE, index=False)
-        print("상태 파일(last_etf_tickers.csv) 업데이트 완료.")
+        print("상태 업데이트 완료.")
 
     except Exception as e:
-        error_msg = f"❌ ETF 모니터링 중 에러 발생:\n{str(e)}"
-        print(error_msg)
-        # 사용자에게 에러 알림 전송
+        error_report = f"❌ [{today_kst}] 모니터링 오류 발생:\n{str(e)}"
+        print(error_report)
         try:
-            await bot.send_message(chat_id=CHAT_ID, text=error_msg)
+            await bot.send_message(chat_id=CHAT_ID, text=error_report)
         except:
             pass
 

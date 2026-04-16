@@ -1,4 +1,4 @@
-pykrx
+pykrx>=1.2.6
 python-telegram-bot
 pandas
 python-dotenv
