@@ -78,19 +78,27 @@ async def check_new_etfs():
         # 3. 신규 상장 종목 식별 (현재 리스트 - 이전 리스트)
         new_tickers = current_tickers - previous_tickers
         
+        # [임시 테스트] 알림 확인을 위한 샘플 종목 강제 추가 (확인 후 삭제 예정)
+        if not is_first_run and not new_tickers:
+            print("🔔 작동 확인을 위해 샘플 종목을 신규 리스트에 추가합니다.")
+            new_tickers.add("SAMPLE_READY")
+
         # 4. 알림 발송 로직
         if not is_first_run and new_tickers:
             # 신규 상장 종목이 있는 경우
             message = f"🆕 {today_kst} 신규 상장 ETF 알림\n(데이터 기준일: {data_date})\n\n"
             for ticker in sorted(list(new_tickers)):
                 try:
-                    name = stock.get_etf_ticker_name(ticker)
+                    if ticker == "SAMPLE_READY":
+                        name = "✅ 알림 시스템 안정화 완료(작동 테스트)"
+                    else:
+                        name = stock.get_etf_ticker_name(ticker)
                     message += f"• [{ticker}] {name}\n"
                 except Exception:
                     message += f"• [{ticker}] (이름 조회 실패)\n"
             
             await bot.send_message(chat_id=CHAT_ID, text=message)
-            print(f"신규 상장 {len(new_tickers)}건 알림 전송 완료.")
+            print(f"신규 상장(샘플 포함) {len(new_tickers)}건 알림 전송 완료.")
         
         elif is_first_run:
             print("초기 리스트 저장 완료. 다음 실행부터 신규 상장을 감지합니다.")
