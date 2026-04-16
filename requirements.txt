@@ -1,4 +1,7 @@
-pykrx>=1.2.6
-python-telegram-bot
+FinanceDataReader
+requests
 pandas
 python-dotenv
+python-telegram-bot
+# pykrx는 현재 '시장' KeyError 문제로 FinanceDataReader로 대체하나, 필요시 대비 유지
+pykrx>=1.2.6
