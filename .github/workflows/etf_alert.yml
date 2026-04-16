@@ -2,8 +2,9 @@ name: Daily KRX ETF Alert
 
 on:
   schedule:
-    # 한국 시간 기준 오전 08:30 (UTC 23:30)
-    - cron: '30 23 * * *'
+    # 한국 시간 기준 오전 08:15 (UTC 23:15)
+    # 서버 지연을 고려하여 15분 일찍 실행되도록 설정
+    - cron: '15 23 * * *'
   workflow_dispatch: # 수동으로 즉시 실행하고 싶을 때 사용
 
 jobs:
